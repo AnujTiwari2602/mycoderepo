@@ -4,6 +4,10 @@ from sqlalchemy import create_engine, Column, Integer, Float, String, JSON, Date
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 import json
+import config as cfg
+
+distance_query=cfg.conn_detail['distance_query']
+aggregated_query=cfg.conn_detail['aggregated_query']
 
 # Define the database connection string
 pg_connection_str = environ["POSTGRESQL_CS"]
@@ -19,9 +23,9 @@ mysql_session = sessionmaker(bind=mysql_engine)
 
 # Define the declarative base for ORM
 Base = declarative_base()
-
+Base1 = declarative_base()
 # Define the device data model
-class DeviceData(Base):
+class DeviceData(Base1):
     __tablename__ = 'devices'
 
     id = Column(Integer, primary_key=True)
@@ -99,18 +103,7 @@ for row in count_temp:
 
 # Query the distance measured for every device per hour
 with pg_engine.connect() as con:
-        statement = text("""select devices_device_id,hour,sum(distance) as distance from (SELECT devices.device_id AS devices_device_id, date_trunc('hour', to_timestamp(cast(time as integer))) as hour,
-case when lag(cast(location as json), 1) over (partition by device_id order by time) is null then 0 
-else acos(sin(radians(json_extract_path_text(cast(location as json), 'latitude')::float)) * 
-sin(radians(json_extract_path_text(lag(cast(location as json), 1) over (partition by device_id order by time), 'latitude')::float)) + 
-cos(radians(json_extract_path_text(cast(location as json), 'latitude')::float)) * 
-cos(radians(json_extract_path_text(lag(cast(location as json), 1) over (partition by device_id order by time), 'latitude')::float)) * 
-cos(radians(json_extract_path_text(cast(location as json), 'longitude')::float) - 
-radians(json_extract_path_text(lag(cast(location as json), 1) over (partition by device_id order by time), 'longitude')::float))) *
-6371 end AS distance 
-FROM devices )s
-group by devices_device_id,hour
-order by devices_device_id,hour;""")
+        statement = text(distance_query)
 # Execute the query and get the results        
         results=con.execute(statement)
         for row in results:
@@ -120,11 +113,10 @@ order by devices_device_id,hour;""")
 
 # Insert the aggregated data into the final table in MYSQL DB
 with mysql_session.connection() as con:
-        statement = text("""select t.device_id,t.timestamp,t.max_temp,c.count,d.distance from temperature_data t inner join count_data c on t.device_id =c.device_id and t.timestamp=c.timestamp inner join distance_data d on t.device_id =d.device_id and t.timestamp =d.timestamp;""")        
+        statement = text(aggregated_query)        
 # Execute the query and get the results           
         results=con.execute(statement)
         for row in results:
-            #print(f"Device {row.device_id}, Hour {row.timestamp}, Max Temp {row.max_temp}, Count {row.count}, Distance {row.distance}")
             row4 = aggregated_data(device_id=row.device_id, timestamp=row.timestamp,max_temp=row.max_temp,count=row.count,distance=row.distance)
             mysql_session.add(row4)
             mysql_session.commit()
