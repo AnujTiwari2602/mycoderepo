@@ -5,7 +5,6 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 import json
 
-#sleep(100)
 # Define the database connection string
 pg_connection_str = environ["POSTGRESQL_CS"]
 mysql_connection_str = environ["MYSQL_CS"]
@@ -26,7 +25,7 @@ class DeviceData(Base):
     __tablename__ = 'devices'
 
     id = Column(Integer, primary_key=True)
-    device_id = Column(String)
+    device_id = Column(String(255))
     temperature = Column(Integer)
     location = Column(JSON)
     time = Column(Integer)
@@ -62,45 +61,11 @@ class aggregated_data(Base):
     distance = Column(Float)
     
 # Create the tables in the databases
-Base.metadata.create_all(pg_engine)
+Base.metadata.create_all(mysql_engine)
 
 # Create a PostgreSQL session
 pg_sess = pg_session()
 mysql_session = mysql_session()
-
-# Truncate staging tables
-with mysql_session.connection() as con_tr:
-        con_tr.execute(text("""CREATE TABLE IF NOT EXISTS temperature_data (
-                               id INT NOT NULL AUTO_INCREMENT,
-                               device_id VARCHAR(255) NOT NULL,
-                               timestamp DATETIME NOT NULL,
-                               max_temp FLOAT NOT NULL,
-                               PRIMARY KEY (id)
-                               );;"""))
-        con_tr.execute(text("""CREATE TABLE IF NOT EXISTS count_data (
-                              id INT NOT NULL AUTO_INCREMENT,
-                              device_id VARCHAR(255) NOT NULL,
-                              timestamp DATETIME NOT NULL,
-                              count FLOAT NOT NULL,
-                              PRIMARY KEY (id)
-                            );"""))
-        con_tr.execute(text("""CREATE TABLE IF NOT EXISTS distance_data (
-                              id INT NOT NULL AUTO_INCREMENT,
-                              device_id VARCHAR(255) NOT NULL,
-                              timestamp DATETIME NOT NULL,
-                              distance FLOAT NOT NULL,
-                              PRIMARY KEY (id)
-                            );"""))  
-        con_tr.execute(text("""CREATE TABLE IF NOT EXISTS aggregated_data (
-                              id INT NOT NULL AUTO_INCREMENT,
-                              device_id VARCHAR(255) NOT NULL,
-                              timestamp DATETIME NOT NULL,
-                              max_temp FLOAT NOT NULL,
-                              count Integer ,
-                              distance FLOAT NOT NULL,
-                              PRIMARY KEY (id)
-                            );"""))  
-        mysql_session.commit()
 
 # Query the maximum temperatures measured for every device per hour
 max_temps_query = pg_sess.query(
